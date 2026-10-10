@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dispatcher Cloud Check</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #fff; --text: #1d1d1b; --muted: #66665f; --border: #dcdcd4;
+    --accent: #1a56db; --err: #b42318; --err-bg: #fef3f2; --warn: #9a5b00; --warn-bg: #fff8e6;
+    --info: #175cd3; --info-bg: #eff6ff; --code: #efefe9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --surface: #1e1e1c; --text: #ecece6; --muted: #a0a097; --border: #383833;
+      --accent: #6b9bff; --err: #ff8a80; --err-bg: #2d1a18; --warn: #f5b84a; --warn-bg: #2b2412;
+      --info: #7cb0ff; --info-bg: #172033; --code: #2a2a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .drop { background: var(--surface); border: 2px dashed var(--border); border-radius: 12px; padding: 28px 20px; text-align: center; }
+  .drop.over { border-color: var(--accent); }
+  .drop p { margin: 0 0 12px; color: var(--muted); }
+  button, .btn { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .privacy { font-size: .85rem; color: var(--muted); margin-top: 12px; }
+  #results { margin-top: 28px; }
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .pill { padding: 4px 12px; border-radius: 999px; font-size: .9rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; background: var(--surface); color: var(--text); border-color: var(--border); }
+  .pill.on { outline: 2px solid var(--accent); }
+  .pill.error { color: var(--err); } .pill.warning { color: var(--warn); } .pill.info { color: var(--info); }
+  .spacer { flex: 1; }
+  .f { background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .f.error { border-left-color: var(--err); } .f.warning { border-left-color: var(--warn); } .f.info { border-left-color: var(--info); }
+  .f h3 { margin: 0 0 4px; font-size: 1rem; }
+  .tag { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; margin-right: 6px; }
+  .error .tag { background: var(--err-bg); color: var(--err); } .warning .tag { background: var(--warn-bg); color: var(--warn); } .info .tag { background: var(--info-bg); color: var(--info); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .85em; word-break: break-all; }
+  .f p { margin: 4px 0; } .fix { color: var(--text); } .where { color: var(--muted); font-size: .85rem; }
+  .ok { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .disclaimer { margin-top: 24px; font-size: .85rem; color: var(--muted); }
+  a { color: var(--accent); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dispatcher Cloud Check</h1>
+  <p class="sub">Find AEM as a Cloud Service Dispatcher migration problems before Cloud Manager does.</p>
+
+  <div class="drop" id="drop">
+    <p>Drop your dispatcher <code>src</code> folder here, or choose it.</p>
+    <div class="row">
+      <label class="btn">Choose folder<input id="picker" type="file" webkitdirectory multiple hidden></label>
+      <button class="ghost" id="demoLegacy">Try a legacy AMS config</button>
+      <button class="ghost" id="demoClean">Try a clean config</button>
+    </div>
+    <div class="privacy">Everything runs in your browser. Your config is never uploaded.</div>
+  </div>
+
+  <section id="results" class="hidden" aria-live="polite"></section>
+
+  <p class="disclaimer">
+    This is a heuristic check based on Adobe's
+    <a href="https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/implementing/content-delivery/ams-aem" target="_blank" rel="noopener">published migration steps</a>.
+    It does not contain the full Apache directive allowlist. Always confirm with Adobe's Dispatcher SDK (<code>validator full</code>).
+    Not affiliated with or endorsed by Adobe.
+  </p>
+</main>
+
+<script src="rules.js"></script>
+<script src="samples.js"></script>
+<script>
+(function () {
+  var R = window.DispatcherRules, S = window.DispatcherSamples;
+  var drop = document.getElementById('drop'), picker = document.getElementById('picker'), results = document.getElementById('results');
+  var MAX_BYTES = 1024 * 1024, SKIP = /(^|\/)(node_modules|\.git)\//;
+  var findings = [], filter = 'all';
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function render() {
+    results.className = '';
+    results.textContent = '';
+    var s = R.summarize(findings);
+    var bar = el('div', 'summary');
+    [['all', 'All ' + findings.length], ['error', s.error + ' errors'], ['warning', s.warning + ' warnings'], ['info', s.info + ' notes']].forEach(function (p) {
+      var b = el('button', 'pill ' + p[0] + (filter === p[0] ? ' on' : ''), p[1]);
+      b.onclick = function () { filter = p[0]; render(); };
+      bar.appendChild(b);
+    });
+    bar.appendChild(el('span', 'spacer'));
+    var copy = el('button', 'ghost', 'Copy report');
+    copy.onclick = function () {
+      navigator.clipboard.writeText(R.toMarkdown(findings)).then(function () { copy.textContent = 'Copied'; setTimeout(function () { copy.textContent = 'Copy report'; }, 1500); });
+    };
+    bar.appendChild(copy);
+    results.appendChild(bar);
+
+    var shown = findings.filter(function (f) { return filter === 'all' || f.severity === filter; });
+    if (!findings.filter(function (f) { return f.severity !== 'info'; }).length) {
+      results.appendChild(el('div', 'ok', 'No known migration problems found. That is not a guarantee: run Adobe\'s validator before you push.'));
+    }
+    shown.forEach(function (f) {
+      var card = el('div', 'f ' + f.severity);
+      var h = el('h3'); h.appendChild(el('span', 'tag', f.severity)); h.appendChild(document.createTextNode(f.id + ' · ' + f.title));
+      card.appendChild(h);
+      var where = el('div', 'where'); var c = el('code', null, f.file + (f.line ? ':' + f.line : '')); where.appendChild(c); card.appendChild(where);
+      card.appendChild(el('p', null, f.detail));
+      var fix = el('p', 'fix'); fix.appendChild(el('strong', null, 'Fix: ')); fix.appendChild(document.createTextNode(f.fix)); card.appendChild(fix);
+      results.appendChild(card);
+    });
+  }
+
+  function run(files) { findings = R.validate(files); filter = 'all'; render(); }
+
+  function readFiles(list) {
+    var jobs = Array.prototype.filter.call(list, function (f) {
+      var p = f.webkitRelativePath || f.name; return !SKIP.test(p) && f.size <= MAX_BYTES;
+    }).map(function (f) { return f.text().then(function (t) { return { path: f.webkitRelativePath || f.name, content: t }; }); });
+    return Promise.all(jobs);
+  }
+
+  function walk(entry, prefix) {
+    return new Promise(function (resolve) {
+      if (entry.isFile) {
+        entry.file(function (f) {
+          var p = prefix + entry.name;
+          if (SKIP.test(p) || f.size > MAX_BYTES) return resolve([]);
+          f.text().then(function (t) { resolve([{ path: p, content: t }]); }, function () { resolve([]); });
+        }, function () { resolve([]); });
+      } else if (entry.isDirectory) {
+        var reader = entry.createReader(), acc = [];
+        (function next() {
+          reader.readEntries(function (batch) {
+            if (!batch.length) return Promise.all(acc).then(function (r) { resolve([].concat.apply([], r)); });
+            batch.forEach(function (e) { acc.push(walk(e, prefix + entry.name + '/')); });
+            next();
+          }, function () { resolve([]); });
+        })();
+      } else resolve([]);
+    });
+  }
+
+  picker.onchange = function () { readFiles(picker.files).then(run); };
+  document.getElementById('demoLegacy').onclick = function () { run(S.legacy); };
+  document.getElementById('demoClean').onclick = function () { run(S.clean); };
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) {
+    var items = e.dataTransfer.items;
+    if (!items) return;
+    var entries = Array.prototype.map.call(items, function (i) { return i.webkitGetAsEntry && i.webkitGetAsEntry(); }).filter(Boolean);
+    Promise.all(entries.map(function (en) { return walk(en, ''); })).then(function (r) { run([].concat.apply([], r)); });
+  });
+})();
+</script>
+</body>
+</html>
