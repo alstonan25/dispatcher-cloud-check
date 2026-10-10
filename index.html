@@ -110,7 +110,7 @@
       var card = el('div', 'f ' + f.severity);
       var h = el('h3'); h.appendChild(el('span', 'tag', f.severity)); h.appendChild(document.createTextNode(f.id + ' · ' + f.title));
       card.appendChild(h);
-      var where = el('div', 'where'); var c = el('code', null, f.file + (f.line ? ':' + f.line : '')); where.appendChild(c); card.appendChild(where);
+      var where = el('div', 'where'); var c = el('code', null, R.where(f)); where.appendChild(c); card.appendChild(where);
       card.appendChild(el('p', null, f.detail));
       var fix = el('p', 'fix'); fix.appendChild(el('strong', null, 'Fix: ')); fix.appendChild(document.createTextNode(f.fix)); card.appendChild(fix);
       results.appendChild(card);

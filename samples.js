@@ -33,7 +33,7 @@
         '  /clientheaders { $include "/etc/httpd/conf.dispatcher.d/clientheaders/ams_publish_clientheaders.any" }',
         '  /virtualhosts { "www.example.com" }',
         '  /renders { /0001 { /hostname "10.1.2.3" /port "4503" } }',
-        '  /filter { $include "../filters/ams_filters.any" }',
+        '  /filter { $include "../filters/custom_filters.any" }',
         '  /cache {',
         '    /docroot "/mnt/var/www/html"',
         '    /allowedClients { /0000 { /glob "*" /type "deny" } /0001 { /glob "10.*" /type "allow" } }',
@@ -43,7 +43,7 @@
     },
     { path: 'dispatcher/src/conf.dispatcher.d/enabled_farms/customerX_farm.any', content: '../available_farms/customerX_farm.any' },
     {
-      path: 'dispatcher/src/conf.dispatcher.d/filters/ams_filters.any',
+      path: 'dispatcher/src/conf.dispatcher.d/filters/custom_filters.any',
       content: [
         '/0001 { /type "deny" /glob "*" }',
         '/0002 { /type "allow" /glob "GET /content/*" }',

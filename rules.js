@@ -77,7 +77,9 @@
       const lines = f.content.split(/\r?\n/);
 
       // --- Path-based rules -------------------------------------------------------------
-      if (/^conf\//.test(p) || /^conf\.modules\.d\//.test(p) || /^conf\.d\/[^/]+\.conf$/.test(p)) {
+      // dispatcher_vhost.conf ships with the archetype ("provided by the runtime environment"), so it is not a finding.
+      const runtimeProvided = p === 'conf.d/dispatcher_vhost.conf' || /provided by the runtime environment/i.test(f.content);
+      if (!runtimeProvided && (/^conf\//.test(p) || /^conf\.modules\.d\//.test(p) || /^conf\.d\/[^/]+\.conf$/.test(p))) {
         add('CS007', 'error', p, null, 'Apache file not used in Cloud Service',
           'AEM as a Cloud Service supplies its own Apache base config, so the conf/, conf.modules.d/ folders and conf.d/*.conf files are not accepted.',
           'Delete this file (migrate any needed settings into a vhost or an allowed include).');
@@ -86,7 +88,7 @@
         add('CS007', 'error', p, null, 'conf.d/whitelists is not supported',
           'The whitelists folder must be removed for Cloud Service.', 'Delete the folder.');
       }
-      if (/^conf\.dispatcher\.d\/(enabled|available)_farms\//.test(p) && !/\.farm$/.test(p) && !/README/i.test(name)) {
+      if (/^conf\.dispatcher\.d\/(enabled|available)_farms\//.test(p) && !/\.farm$/.test(p) && !/README/i.test(name) && name !== 'farms.any') {
         add('CS008', 'error', p, null, 'Farm file must be named *.farm',
           'Cloud Service expects farm files to match *.farm (for example customerX_farm.any becomes customerX.farm).',
           'Rename to <name>.farm and update the enabled_farms symlink.');
@@ -105,17 +107,17 @@
           'This file is part of the AMS default setup and is deleted when moving to Cloud Service.',
           'Delete it and remove its Include statements.');
       }
-      if (/^conf\.d\/enabled_vhosts\/[^/]+$/.test(p) || /^conf\.dispatcher\.d\/enabled_farms\/[^/]+$/.test(p)) {
+      if (/^conf\.d\/enabled_vhosts\/[^/]+\.vhost$/.test(p) || /^conf\.dispatcher\.d\/enabled_farms\/[^/]+\.farm$/.test(p)) {
         const body = f.content.trim();
         const pseudo = !/[\r\n]/.test(body) && /^(?:\.\.\/)*available_(?:farms|vhosts)\/[^\s/]+$/.test(body);
         if (pseudo) {
-          add('CS013', 'error', p, null, 'Windows pseudo-symlink (plain text file)',
-            'This file only contains a path ("' + body + '"). Git on Windows checked out the symlink as a text file, which Cloud Manager rejects.',
-            'Store it as a real git symlink (mode 120000): enable core.symlinks, or use `git update-index --add --cacheinfo 120000,<blob>,' + p + '`.');
+          add('CS013', 'warning', p, null, 'Symlink stored as a plain text file',
+            'This file only contains a path ("' + body + '"). That is what a Windows checkout without symlink support produces from a correct git symlink, but it is also what a wrongly committed symlink looks like, and Cloud Manager rejects those.',
+            'Verify in git: `git ls-files -s ' + p + '` must show mode 120000. If it shows 100644, recommit it as a symlink (`git update-index --add --cacheinfo 120000,<blob>,' + p + '`).');
         } else {
-          add('CS014', 'info', p, null, 'Cannot verify symlink from a browser upload',
-            'Files in enabled_farms/enabled_vhosts must be symlinks to available_*, but a browser upload follows symlinks and cannot tell.',
-            'Check locally: `git ls-files -s ' + p + '` should show mode 120000.');
+          add('CS014', 'info', p, null, 'Cannot verify this is a symlink',
+            'Files in enabled_farms/enabled_vhosts must be symlinks to available_*, but a folder upload follows symlinks, so a symlink and a full copy look the same.',
+            'Check locally: `git ls-files -s ' + p + '` should show mode 120000. A full copy committed here is rejected by Cloud Manager.');
         }
         const tokens = name.toLowerCase().split(/[_.\-]/);
         const hit = ['author', 'unhealthy', 'health', 'lc', 'flush'].find((t) => tokens.includes(t));
@@ -178,8 +180,27 @@
       });
     }
 
-    out.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.file.localeCompare(b.file) || (a.line || 0) - (b.line || 0));
-    return out;
+    // Files that must be deleted outright: line-level findings inside them are noise.
+    const doomed = new Set(out.filter((f) => f.line === null && ['CS006', 'CS007', 'CS010'].includes(f.id)).map((f) => f.file));
+    // One finding per rule per file, with every affected line listed.
+    const grouped = new Map();
+    for (const f of out) {
+      if (f.line !== null && doomed.has(f.file)) continue;
+      const key = f.id + '|' + f.title + '|' + f.file;
+      const g = grouped.get(key);
+      if (!g) grouped.set(key, Object.assign({}, f, { lines: f.line ? [f.line] : [] }));
+      else if (f.line) g.lines.push(f.line);
+    }
+    const result = Array.from(grouped.values());
+    result.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.file.localeCompare(b.file) || (a.line || 0) - (b.line || 0));
+    return result;
+  }
+
+  // "file:12, 40, 41 (+3 more)"
+  function where(f) {
+    if (!f.lines || !f.lines.length) return f.file;
+    const shown = f.lines.slice(0, 8).join(', ');
+    return f.file + ':' + shown + (f.lines.length > 8 ? ' (+' + (f.lines.length - 8) + ' more)' : '');
   }
 
   function summarize(findings) {
@@ -193,7 +214,7 @@
     const lines = ['# Dispatcher Cloud-readiness report', '', `${s.error} errors, ${s.warning} warnings, ${s.info} notes`, ''];
     findings.forEach((f) => {
       lines.push(`- **[${f.severity.toUpperCase()}] ${f.id}: ${f.title}**  `);
-      lines.push(`  \`${f.file}${f.line ? ':' + f.line : ''}\`  `);
+      lines.push(`  \`${where(f)}\`  `);
       lines.push(`  ${f.detail}  `);
       lines.push(`  Fix: ${f.fix}`);
     });
@@ -201,7 +222,7 @@
     return lines.join('\n');
   }
 
-  const api = { validate, summarize, toMarkdown, normalizePath };
+  const api = { validate, summarize, toMarkdown, normalizePath, where };
   root.DispatcherRules = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

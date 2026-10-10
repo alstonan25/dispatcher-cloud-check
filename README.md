@@ -33,7 +33,7 @@ Rules come from Adobe's [AMS to AEM as a Cloud Service migration steps](https://
 | CS010 | warning | legacy AMS files (`*_invalidate_allowed.any`, `base_rewrite.rules`, ...) |
 | CS011 | error | legacy variables (`PUBLISH_DOCROOT`, `DISP_ID`, `PUBLISH_FORCE_SSL`, `PUBLISH_WHITELIST_ENABLED`) |
 | CS012 | error | `<VirtualHost>` on a port other than 80 |
-| CS013 | error | Windows pseudo-symlinks in `enabled_farms` / `enabled_vhosts` |
+| CS013 | warning | symlinks in `enabled_farms` / `enabled_vhosts` stored as plain text (Windows checkout or wrongly committed; verify with `git ls-files -s`) |
 | CS014 | info | symlinks cannot be verified from a browser upload |
 | CS015 | warning | AMS-only author / health / lc / flush farms or vhosts enabled |
 
