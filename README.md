@@ -6,6 +6,9 @@ Drop your dispatcher `src` folder into the page and get a list of known migratio
 
 ## Use it
 
+**Live:** https://alstonan25.github.io/dispatcher-cloud-check/
+
+
 Open `index.html` in a browser (or serve the folder statically), then drop or choose your dispatcher `src` folder. Two built-in demos show a legacy AMS-style config and a clean Cloud-style config.
 
 ```bash
