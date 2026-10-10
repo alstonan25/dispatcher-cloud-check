@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Adobe's official Dispatcher validator
+    url: https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/implementing/content-delivery/disp-overview
+    about: This tool is a heuristic first pass. Adobe's Dispatcher SDK validator is the authority; check there first if Cloud Manager disagrees.

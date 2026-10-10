@@ -1,0 +1,48 @@
+name: False positive
+description: The validator flagged something that is actually fine for AEM as a Cloud Service
+title: "[False positive] CSxxx: "
+labels: ["false-positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make this more accurate.
+        **Do not paste confidential configuration** (hostnames, IPs, customer names, secrets). Replace them with placeholders and trim the snippet to the smallest example that still reproduces the problem.
+  - type: input
+    id: rule
+    attributes:
+      label: Rule ID
+      description: The ID shown on the finding, e.g. CS007.
+      placeholder: CS007
+    validations:
+      required: true
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Minimal config that triggers it
+      description: Include the file path (relative to the dispatcher folder, e.g. `conf.d/available_vhosts/x.vhost`) and the relevant lines.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this valid on Cloud Service?
+      description: Best of all, link to Adobe documentation, or say that Adobe's Dispatcher SDK validator (`validator full`) accepts it.
+    validations:
+      required: true
+  - type: dropdown
+    id: sdk
+    attributes:
+      label: Did you run Adobe's validator on it?
+      options:
+        - "Yes, it passes"
+        - "Yes, it also reports a problem"
+        - "No, I haven't"
+    validations:
+      required: true
+  - type: input
+    id: project
+    attributes:
+      label: Project type
+      description: e.g. AEM archetype version, AMS migration, from scratch. Optional.

@@ -1,0 +1,46 @@
+name: Missing rule
+description: A Cloud Service Dispatcher problem the validator should have caught
+title: "[Missing rule] "
+labels: ["new-rule"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rules here are based on Adobe's published guidance, so a source makes a report much easier to act on.
+        **Do not paste confidential configuration.** Use placeholders and the smallest example you can.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What went wrong?
+      description: What failed (Cloud Manager pipeline, local validator, runtime) and the error message if you have it.
+    validations:
+      required: true
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Minimal config that causes it
+      description: Include the file path and the relevant lines.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: What fixed it?
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Link to Adobe documentation, a release note, or an Experience League thread, if there is one.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it?
+      options:
+        - "Build or deployment fails"
+        - "Works but is unsupported or risky"
+        - "Just a best practice"
+    validations:
+      required: true
